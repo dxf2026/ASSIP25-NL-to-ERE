@@ -1,1 +1,1 @@
-$ABC$
+Runtime-verification (RV) tools built off of the Monitoring Oriented Programming framework (MOP), specifically TraceMOP and JavaMOP, monitor execution trace with formalised runtime properties (.mop files).
