@@ -1,24 +1,15 @@
 import sys;
 
 args = sys.argv[1:]
-import re
-import random
-import matplotlib.pyplot as plt
-import time
-import math
 
 
 def remove_terminating_sequence(ere: str):
-    # if (split_ere[-1][-1] == '+'):
-    #     split_ere[-1] = split_ere[-1][:-1]
-    #
-    # total_parenthesis = False
-    # if (split_ere[0][0] == '('):
-    #     total_parenthesis = True
-    #     split_ere[0] = split_ere[0][1:]
-    #     split_ere[-1] = split_ere[-1][:-1]
-    #
-    # final_sequence_split = split_ere[-1].split("|")
+    return
+
+def implicit_creation_events(ere: str):
+    return
+
+def replace_epsilon_events(ere: str):
     return
 
 def create_anonymization(ere:str):
@@ -30,14 +21,16 @@ def create_anonymization(ere:str):
     The number of unique events is limited to 26 using this algorithm, the capital letters of the alphabet.
     The special epsilon events will be replaced with the "~", a character.
     '''
+    ere += " "
+
     curr_replacement = "A"
     curr_event = ""
     event_dict = {"epsilon":"~"}
     new_ere = ""
 
-    valid_char = [*range(ord('a'), ord('z')+1), *range(ord('0'), ord('9')+1), "_"]
+    valid_char = [*range(ord('a'), ord('z')+1), *range(ord('0'), ord('9')+1), ord("_")]
     for c in ere:
-        if c in valid_char:
+        if ord(c) in valid_char:
             curr_event += c
         else:
             if curr_event:
@@ -58,13 +51,15 @@ def use_anonymization(ere:str, anonymization_map:dict):
     with single unique characters.
     If an event in this ere is not in the anonymization_map, it replaces them starting with the lowercase alphabet.
     '''
+    ere += " "
+
     curr_event = ""
     new_ere = ""
     curr_replacement = "a"
 
-    valid_char = [*range(ord('a'), ord('z') + 1), *range(ord('0'), ord('9') + 1), "_"]
+    valid_char = [*range(ord('a'), ord('z') + 1), *range(ord('0'), ord('9') + 1), ord("_")]
     for c in ere:
-        if c in valid_char:
+        if ord(c) in valid_char:
             curr_event += c
         else:
             if curr_event:
@@ -72,6 +67,7 @@ def use_anonymization(ere:str, anonymization_map:dict):
                     anonymization_map[curr_event] = curr_replacement
                     new_ere += curr_replacement
                     curr_replacement = chr(ord(curr_replacement)+1)
+                    curr_event = ""
                 else:
                     new_ere += anonymization_map[curr_event]
                     curr_event = ""
@@ -80,11 +76,6 @@ def use_anonymization(ere:str, anonymization_map:dict):
 def standardize_ere_specs(ere1: list, ere2: list):
     ere1_string, anom_dict = create_anonymization(ere1[0].lower())
     ere2_string = use_anonymization(ere2[0].lower(), anom_dict)
-
-    # perform remove_terminating_sequence if it is of match handler type
-    if (ere1[1] == "match"):
-        ere1_string = remove_terminating_sequence(ere1_string)
-        ere2_string = remove_terminating_sequence(ere2_string)
 
     return ere1_string, ere2_string
 
@@ -129,6 +120,11 @@ if __name__ == "__main__":
     f = open("standardized_" + generated_ere_file, 'w')
     f.write("\n".join(generated_ere_new))
     f.close()
+
+    print("Created standardized_" + generated_ere_file + " containing standardized generated ere")
     f = open("standardized_" + ground_truth_ere_file, 'w')
     f.write("\n".join(ground_truth_ere_new))
     f.close()
+
+    print("Created standardized_" + ground_truth_ere_file + " containing standardized ground-truth ere")
+
