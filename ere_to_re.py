@@ -21,32 +21,38 @@ def create_anonymization(ere:str):
     The number of unique events is limited to 26 using this algorithm, the capital letters of the alphabet.
     The special epsilon events will be replaced with the "~", a character.
     '''
-    ere += " "
+    ere += " " # Append " " to the ERE so that if the final event has no operator it will still add it to the new ERE
 
-    curr_replacement = "A"
-    curr_event = ""
-    event_dict = {"epsilon":"~"}
-    new_ere = ""
+    curr_replacement = "A" # This is the current replacement for the event. Note that this means there is at most 26 events, but that is enough for TraceMOP's dataset
+    curr_event = "" # This is a string where we store the name of the current event
+    event_dict = {"epsilon":"~"} # This is a dictionary that stores the events that have been found so far. Epsilon, the empty event, is instantialized to the ~
+    new_ere = "" # This is the new ere that we create after anonymization
 
     valid_char = [*range(ord('a'), ord('z')+1), *range(ord('0'), ord('9')+1), ord("_")]
-    for c in ere:
+    '''
+    This is a list of all characters allowed in event names.
+    None of these are operators so if a character is in this set it must be part of an event name.
+    '''
+    for c in ere: # Iterate over each character
         if ord(c) in valid_char:
-            curr_event += c
+            curr_event += c # If the character is in the valid_char list, add it to the back of the current event
         else:
-            if curr_event:
-                if curr_event in event_dict:
+
+            if curr_event:# If the character is not in the valid_char list, we first check if there was an event name that finished.
+                if curr_event in event_dict: # if the event has occured before, we use the replacement character
                     new_ere += event_dict[curr_event]
-                else:
-                    event_dict[curr_event] = curr_replacement
-                    new_ere += curr_replacement
-                    curr_replacement = chr(ord(curr_replacement)+1)
+                else: #If the event has not occured before:
+                    event_dict[curr_event] = curr_replacement #1. We first add it to the event dictionary
+                    new_ere += curr_replacement #2. we then add that character to the new ERE
+                    curr_replacement = chr(ord(curr_replacement)+1) #3. Then we incremement the current replacement character
 
-                curr_event = ""
+                curr_event = "" # We reset the current event back to the empty string as we have finished parsing that event
 
-            new_ere += c
-    return new_ere, event_dict
+            new_ere += c # add the non-valid character
+    return new_ere, event_dict #we return the new ERe, and the event dictionary to be used in anonymising the other ERE
 def use_anonymization(ere:str, anonymization_map:dict):
     '''
+    Takes an ere and a anonymization map as input.
     Uses the mapping generated from create_anonymization to replace the events
     with single unique characters.
     If an event in this ere is not in the anonymization_map, it replaces them starting with the lowercase alphabet.
@@ -56,6 +62,10 @@ def use_anonymization(ere:str, anonymization_map:dict):
     curr_event = ""
     new_ere = ""
     curr_replacement = "a"
+    '''
+    We still need the curr_replacement string because there could be events found in this ERE that were not inside the previous ERE
+    We start at "a" instead of "A" to differentiate.
+    '''
 
     valid_char = [*range(ord('a'), ord('z') + 1), *range(ord('0'), ord('9') + 1), ord("_")]
     for c in ere:
@@ -63,19 +73,19 @@ def use_anonymization(ere:str, anonymization_map:dict):
             curr_event += c
         else:
             if curr_event:
-                if curr_event not in anonymization_map:
-                    anonymization_map[curr_event] = curr_replacement
-                    new_ere += curr_replacement
-                    curr_replacement = chr(ord(curr_replacement)+1)
-                    curr_event = ""
-                else:
+                if curr_event not in anonymization_map: # If the event was not in the previous ERE, we perform the same steps as earlier.
+                    anonymization_map[curr_event] = curr_replacement # 1. We add the new character into the anonymization_map
+                    new_ere += curr_replacement # 2. We add the character to the new ERE
+                    curr_replacement = chr(ord(curr_replacement)+1) # 3. We increment the current replacement character
+                else: # If the event has been seen before, we add the replacement character to the new ERE
                     new_ere += anonymization_map[curr_event]
-                    curr_event = ""
+
+                curr_event = ""
             new_ere += c
-    return new_ere
+    return new_ere # We return only the new_ere
 def standardize_ere_specs(ere1: list, ere2: list):
-    ere1_string, anom_dict = create_anonymization(ere1[0].lower())
-    ere2_string = use_anonymization(ere2[0].lower(), anom_dict)
+    ere1_string, anom_dict = create_anonymization(ere1[0])
+    ere2_string = use_anonymization(ere2[0], anom_dict)
 
     return ere1_string, ere2_string
 
