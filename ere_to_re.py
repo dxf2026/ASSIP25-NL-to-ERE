@@ -28,10 +28,11 @@ def create_anonymization(ere:str):
     then the letter v, and so on.
     In ERE for TraceMOP, "event" is a single entity.
     The number of unique events is limited to 26 using this algorithm, the capital letters of the alphabet.
+    The special epsilon events will be replaced with the "~", a character.
     '''
     curr_replacement = "A"
     curr_event = ""
-    event_dict = {}
+    event_dict = {"epsilon":"~"}
     new_ere = ""
 
     valid_char = [*range(ord('a'), ord('z')+1), *range(ord('0'), ord('9')+1), "_"]
@@ -40,9 +41,13 @@ def create_anonymization(ere:str):
             curr_event += c
         else:
             if curr_event:
-                event_dict[curr_event] = curr_replacement
-                curr_replacement = chr(ord(curr_replacement)+1)
-                new_ere += curr_event
+                if curr_event in event_dict:
+                    new_ere += event_dict[curr_event]
+                else:
+                    event_dict[curr_event] = curr_replacement
+                    new_ere += curr_replacement
+                    curr_replacement = chr(ord(curr_replacement)+1)
+
                 curr_event = ""
 
             new_ere += c
@@ -51,9 +56,11 @@ def use_anonymization(ere:str, anonymization_map:dict):
     '''
     Uses the mapping generated from create_anonymization to replace the events
     with single unique characters.
+    If an event in this ere is not in the anonymization_map, it replaces them starting with the lowercase alphabet.
     '''
     curr_event = ""
     new_ere = ""
+    curr_replacement = "a"
 
     valid_char = [*range(ord('a'), ord('z') + 1), *range(ord('0'), ord('9') + 1), "_"]
     for c in ere:
@@ -61,8 +68,13 @@ def use_anonymization(ere:str, anonymization_map:dict):
             curr_event += c
         else:
             if curr_event:
-                new_ere += anonymization_map[curr_event]
-                curr_event = ""
+                if curr_event not in anonymization_map:
+                    anonymization_map[curr_event] = curr_replacement
+                    new_ere += curr_replacement
+                    curr_replacement = chr(ord(curr_replacement)+1)
+                else:
+                    new_ere += anonymization_map[curr_event]
+                    curr_event = ""
             new_ere += c
     return new_ere
 def standardize_ere_specs(ere1: list, ere2: list):
@@ -70,7 +82,7 @@ def standardize_ere_specs(ere1: list, ere2: list):
     ere2_string = use_anonymization(ere2[0].lower(), anom_dict)
 
     # perform remove_terminating_sequence if it is of match handler type
-    if (ere1[1] == "match"):git
+    if (ere1[1] == "match"):
         ere1_string = remove_terminating_sequence(ere1_string)
         ere2_string = remove_terminating_sequence(ere2_string)
 
