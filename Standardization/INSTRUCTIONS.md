@@ -21,7 +21,7 @@ gen_ere3
 ```python
 python standardizer.py generated_ere.txt ground_truth_ere.txt
 ```
-5. output will be the following format in the std output stream
+5. output will be the following format in the std output stream, True/False depends on result
 ```python
 Test #0:
 Ground: gt_ere1
