@@ -1,14 +1,15 @@
 import sys;
-import base64
-
-# for selenium (?)
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-import pandas as pd
+import time
 
 args = sys.argv[1:]
+import base64
+import pandas as pd
+
+import string
+from automata.fa.nfa import NFA
+from automata.fa.dfa import DFA
+
+
 
 def create_anonymization(ere:str):
     '''
@@ -82,79 +83,20 @@ def use_anonymization(ere:str, anonymization_map:dict):
             new_ere += c
     return new_ere # We return only the new_ere
 
-def standardize_to_dfa(ere:str, creation_events:list, driver):
+def standardize_to_dfa(ere:str, creation_events:list):
     '''
-    Use Cyberzhg tool to convert RE to min-DFA
+    Use automaton to convert to min-dfa
     '''
 
-    b64_regex = str(base64.b64encode(ere.encode("ascii")))[2:-1]
-
-    driver.get(f"https://cyberzhg.github.io/toolbox/min_dfa?regex={b64_regex}")
-
-    wait = WebDriverWait(driver, 10)
-    table = wait.until(EC.presence_of_element_located((By.ID, "dfa_table")))
-    headers = [th.text for th in table.find_elements(By.TAG_NAME, "th")]
-
-    rows = table.find_elements(By.TAG_NAME, "tr")
-    data = []
-    for row in rows:
-        cols = row.find_elements(By.TAG_NAME, "td")
-        if cols:  # skip header row
-            data.append([col.text for col in cols])
-
-    df = pd.DataFrame(data, columns=headers)
-    #print(df)
-
-    '''
-    Turn the pandas dataframe that defines the min-DFA into a graph represented by an adjacency list
-    '''
-    crude_adj = []
-
-    accepting = []
-    for i, itm in enumerate(df.iterrows()):
-        instance = itm[1]
-        if instance['TYPE'] == 'accept':
-            accepting.append(i)
-
-        dct = dict(instance)
-        del dct['DFA STATE']
-        del dct['Min-DFA STATE']
-        del dct['TYPE']
-
-        to_remove = []
-        for k in dct:
-            if not dct[k]:
-                to_remove.append(k)
-            else:
-                dct[k] = int(dct[k]) - 1
-
-        for k in to_remove:
-            del dct[k]
-
-        crude_adj.append(dct)
-
-    #print(crude_adj)
-    #print(accepting)
+    alphabet = set(string.ascii_uppercase)|set(string.ascii_lowercase)
+    nfa = NFA.from_regex(ere, input_symbols=alphabet)
+    dfa = DFA.from_nfa(nfa)
 
 
-    '''
-    Split transitions into individual transitions
-        a,b -> 0
-        ~
-        a -> 0
-        b -> 0
-    '''
-    adj = []
-
-    for u in crude_adj:
-        v = {}
-        for E in u:
-            all_transitions = E.split(",")
-            for transition in all_transitions:
-                v[transition] = u[E]
-        adj.append(v)
-
-    #print(adj)
+    adj = dfa.transitions
+    initial_state = dfa.initial_state
+    accepting = dfa.final_states
+    adj = {k: {c: adj[k][c] for c in adj[k]} for k in adj}
 
     '''
     Remove terminal state edges (only apply if @match type). Then run a dfs from the root node to see what nodes may have been impacted
@@ -168,25 +110,32 @@ def standardize_to_dfa(ere:str, creation_events:list, driver):
     '''
     if creation_events:
         new_first_node = {}
-        number_not_creation = 0
-        for E in adj[0]:
+        num_not_creation = 0
+        for E in adj[initial_state]:
             if E not in creation_events:
-                number_not_creation += 1
+                num_not_creation += 1
                 continue
-
-            new_first_node[E] = adj[0][E] + 1
-
-        if number_not_creation > 0:
-            adj.insert(0, new_first_node)
-            for i in range(1, len(adj)):
-                adj[i] = {u: adj[i][u] + 1 for u in adj[i]}
-
-            if (0 in accepting):
-                accepting.append(-1)
-            accepting = [i + 1 for i in accepting]
+            new_first_node[E] = adj[initial_state][E]
+        if num_not_creation:
+            mex = 0
+            while mex in adj:
+                mex += 1
+            adj[mex] = new_first_node
+            initial_state = mex
 
     #print(adj)
-    return adj, accepting
+    all_transitions = set(string.ascii_lowercase)|set(string.ascii_uppercase)
+
+    new_dfa = DFA(
+        states={k for k in adj.keys()},
+        input_symbols=all_transitions,
+        transitions=adj,
+        initial_state=initial_state,
+        final_states=accepting,
+        allow_partial=True
+    )
+
+    return new_dfa
 
 
 ground_adj = []
@@ -223,7 +172,7 @@ def check_equivalence(u: int):
 
     return not (False in all_valid)
 
-def compare_expressions(raw_ground:str, raw_generated:str, creation_events:list, driver):
+def compare_expressions(raw_ground:str, raw_generated:str, creation_events:list):
     global ground_adj, ground_accepting, generated_adj, generated_accepting, equivalent_node, ground_visited, generated_visited
     ground, anom_dict = create_anonymization(raw_ground)
     generated = use_anonymization(raw_generated, anom_dict)
@@ -231,18 +180,17 @@ def compare_expressions(raw_ground:str, raw_generated:str, creation_events:list,
     # Remove all spaces -> they are unnecessary because every event is a single character
     ground = "".join(ground.split())
     generated = "".join(generated.split())
+    ground = ground.replace("ϵ", "()")
+    generated = generated.replace("ϵ", "()")
     creation_events = sorted([anom_dict[u] for u in creation_events])
 
 
-    ground_adj, ground_accepting = standardize_to_dfa(ground, creation_events, driver)
-    generated_adj, generated_accepting = standardize_to_dfa(generated, creation_events, driver)
-    equivalent_node = {0:0}
-    ground_visited = []
-    generated_visited = []
+    ground_dfa = standardize_to_dfa(ground, creation_events)
+    generated_dfa = standardize_to_dfa(generated, creation_events)
 
-    res = check_equivalence(0)
-
-    return res
+    diff1 = ground_dfa.difference(generated_dfa)
+    diff2 = generated_dfa.difference(ground_dfa)
+    return diff1.isempty() and diff2.isempty()
 
 if __name__ == "__main__":
     generated_ere_file = args[0] # ere
@@ -260,14 +208,14 @@ if __name__ == "__main__":
         ground_truth_ere_list.append(l)
     f.close()
 
-    driver = webdriver.Firefox()
     for i in range(len(ground_truth_ere_list)):
         generated_ere = generated_ere_list[i].split(";")
         ground_truth_ere = ground_truth_ere_list[i].split(";")
         creation_events = ground_truth_ere[2].strip().split(',')
         creation_events.sort()
-        res = compare_expressions(ground_truth_ere[0], generated_ere[0], creation_events, driver)
-        print(f"Test #{i}:\nGround: {ground_truth_ere[0]}\nGenerated: {generated_ere[0]}\nResult: {res}")
+        res = compare_expressions(ground_truth_ere[0].strip(), generated_ere[0].strip(), creation_events)
+        print(f"Test #{i}:\nGround: {ground_truth_ere[0].strip()}\nGenerated: {generated_ere[0].strip()}")
+        print(f"Result: {res}")
+        print()
 
-    driver.close()
-    print("Driver Closed, Finished Tests")
+    print("Finished Tests")
